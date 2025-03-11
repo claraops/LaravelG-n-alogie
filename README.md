@@ -2,7 +2,7 @@
 test technique pour un projet de genealogie
 
 mes differentes Url pour faciliter: 
--liste personnes : http://127.0.0.1:8000/
+-liste personnes : http://127.0.0.1:8000
 -creer une personne : http://127.0.0.1:8000/people/create
 -voir information d'une personne : http://127.0.0.1:8000/people/1
 -voir les utlisateur connecter : http://127.0.0.1:8000/dashboard
@@ -28,60 +28,80 @@ Voici le lien vers le schéma de la base de données créé avec dbdiagram.io :
 
 ## Évolution des Données
 
-### Propositions de Modifications
+#   Cas 1 : Ajout de Membres de la Famille
+Insertion d'une fiche personne :
+Un utilisateur crée une nouvelle fiche personne dans la table people.
+Exemple : jean01 crée la fiche de sa fille Marie PERRET.
 
-Lorsqu'un utilisateur propose une modification (par exemple, ajouter une nouvelle relation), les informations suivantes sont insérées dans la table `modification_proposals` :
+=>INSERT INTO people (first_name, last_name, birth_name, middle_names, date_of_birth, created_by)
+VALUES ('Marie', 'PERRET', 'Marie DUPONT', 'Anne', '2000-01-01', 1);
 
-- `id` : Identifiant unique de la proposition.
-- `user_id` : Identifiant de l'utilisateur ayant proposé la modification.
-- `type` : Type de modification (ajout de relation, modification de fiche, etc.).
-- `data` : Données spécifiques à la modification proposée (par exemple, les identifiants des personnes pour une relation).
-- `status` : Statut de la proposition (`pending`, `validated`, `rejected`).
+Ajout d'une relation :
+L'utilisateur ajoute une relation entre deux personnes dans la table relationships.
+Exemple : jean01 ajoute une relation parent-enfant entre Jean PERRET et Marie PERRET.
 
-### Validation des Modifications
+=>INSERT INTO relationships (person_id, related_person_id, relationship_type, created_by)
+VALUES (1, 2, 'parent', 1);
 
-Les utilisateurs peuvent voter pour ou contre une proposition. Chaque vote est enregistré dans la table `modification_votes` :
+#  Cas 2 : Invitations
+Création d'une fiche pour un invité :
+Un utilisateur crée une fiche pour un membre de sa famille qui n'est pas encore inscrit.
+Exemple : jean01 crée la fiche de sa fille Rose PERRET.
 
-- `id` : Identifiant unique du vote.
-- `proposal_id` : Identifiant de la proposition de modification.
-- `user_id` : Identifiant de l'utilisateur ayant voté.
-- `vote` : Vote de l'utilisateur (`accept` ou `reject`).
+=>INSERT INTO people (first_name, last_name, birth_name, middle_names, date_of_birth, created_by)
+VALUES ('Rose', 'PERRET', 'Rose DUPONT', 'Claire', '2005-01-01', 1);
 
-Le statut de la proposition dans `modification_proposals` est mis à jour en fonction des votes :
+Inscription de l'invité :
+L'invité s'inscrit sur le site et acquiert la fiche créée pour lui.
+Exemple : rose03 s'inscrit et acquiert la fiche Rose PERRET.
 
-- Si au moins 3 utilisateurs acceptent la proposition, le statut passe à `validated`.
-- Si au moins 3 utilisateurs rejettent la proposition, le statut passe à `rejected`.
+#  Cas 3 : Inscription sans Invitation
+Création d'une fiche par un nouvel utilisateur :
+Un utilisateur s'inscrit sans invitation et crée sa propre fiche.
+Exemple : marc10 s'inscrit et crée sa fiche Marc DUPONT.
 
-Une fois qu'une proposition est validée, les modifications sont appliquées aux tables concernées (`people` ou `relationships`). Si une proposition est rejetée, aucune modification n'est appliquée.
+=>INSERT INTO people (first_name, last_name, birth_name, middle_names, date_of_birth, created_by)
+VALUES ('Marc', 'DUPONT', 'Marc LEROY', 'Jean', '1990-01-01', 3);
 
-### Exemple de Scénario
+#  Cas 4 : Propositions de Modifications
+Proposition de modification :
+Un utilisateur propose une modification pour une personne ou une relation.
+Exemple : rose03 propose de modifier le prénom de Rose PERRET en Rosalie.
 
-1. `rose03` propose d'ajouter une relation entre `Rose PERRET` et `Jean PERRET`.
-   - Insertion dans `modification_proposals` :
-     ```
-     INSERT INTO modification_proposals (user_id, type, data, status)
-     VALUES (3, 'add_relationship', '{ "person1_id": 4, "person2_id": 1, "relationship_type": "father" }', 'pending');
-     ```
+=>INSERT INTO modification_proposals (type, target_id, field_name, proposed_value, proposed_by, status)
+VALUES ('person', 3, 'first_name', 'Rosalie', 3, 'pending');
 
-2. Les utilisateurs `jean01`, `marie02`, et `marc10` acceptent la proposition.
-   - Insertion dans `modification_votes` :
-     ```
-     INSERT INTO modification_votes (proposal_id, user_id, vote)
-     VALUES (1, 1, 'accept'), (1, 2, 'accept'), (1, 5, 'accept');
-     ```
+Proposition d'ajout de relation :
+Un utilisateur propose d'ajouter une nouvelle relation.
+Exemple : rose03 propose d'ajouter une relation entre Rose PERRET et Jean PERRET.
 
-3. Le statut de la proposition passe à `validated` et la relation est ajoutée dans `relationships`.
-   - Mise à jour de `modification_proposals` :
-     ```
-     UPDATE modification_proposals
-     SET status = 'validated'
-     WHERE id = 1;
-     ```
+=>INSERT INTO modification_proposals (type, target_id, field_name, proposed_value, proposed_by, status)
+VALUES ('relationship', 2, 'relationship_type', 'parent', 3, 'pending');
 
-   - Insertion dans `relationships` :
-     ```
-     INSERT INTO relationships (person1_id, person2_id, relationship_type)
-     VALUES (4, 1, 'father');
-     ```
+#  Cas 5 : Validation des Modifications
+Vote des utilisateurs :
+Les utilisateurs votent pour accepter ou rejeter la proposition.
+Exemple : jean01, marie02, et marc10 votent pour la proposition de rose03.
 
-En suivant ce processus, la structure de la base de données permet de gérer les propositions de modifications et leur validation par la communauté, assurant ainsi l'intégrité des informations généalogiques.
+=>INSERT INTO modification_votes (proposal_id, user_id, vote)
+VALUES (1, 1, 'accept'), (1, 2, 'accept'), (1, 3, 'accept');
+Mise à jour du statut de la proposition :
+
+Si 3 utilisateurs acceptent la proposition, elle est validée.
+Exemple : La proposition de rose03 est acceptée.
+
+=>UPDATE modification_proposals
+SET status = 'accepted'
+WHERE id = 1;
+
+Application de la modification :
+La modification est appliquée à la table concernée (people ou relationships).
+Exemple : Le prénom de Rose PERRET est mis à jour.
+
+=>UPDATE people
+SET first_name = 'Rosalie'
+WHERE id = 3;
+Historique des modifications :
+
+Les propositions et les votes sont conservés dans les tables modification_proposals et modification_votes pour garder une trace des modifications.
+
